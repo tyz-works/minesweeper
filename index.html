@@ -204,6 +204,31 @@
     }
     #restart-btn:hover { background: #4a4a8a; color: #fff; }
 
+    /* ─── Flag mode button ─── */
+    #flag-mode-btn {
+      padding: 6px 14px;
+      border: 2px solid #4a4a8a;
+      border-radius: 6px;
+      background: #16213e;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.15s;
+    }
+    #flag-mode-btn:hover { background: #4a4a8a; color: #fff; }
+    #flag-mode-btn.active {
+      background: #7a3a3a;
+      border-color: #ff8a8a;
+      color: #fff;
+    }
+
+    /* ─── Help text ─── */
+    #help-text {
+      font-size: 0.75rem;
+      color: #555;
+      margin-bottom: 10px;
+    }
+
     /* ─── Records bar ─── */
     #records-bar {
       display: flex;
@@ -285,8 +310,10 @@
   <div id="info-bar">
     <div class="info-item"><span>💣</span><span id="mine-count">10</span></div>
     <div class="info-item"><span>⏱</span><span id="timer">0</span>s</div>
+    <button id="flag-mode-btn" title="旗モード（右クリックと同じ）">🚩 旗</button>
     <button id="restart-btn">🔄 Restart</button>
   </div>
+  <div id="help-text">右クリック（または🚩ボタン）で旗を立てる / 外す</div>
 
   <div id="board-wrapper">
     <div id="board"></div>
@@ -330,6 +357,8 @@
     };
 
     // ─── DOM refs ─────────────────────────────────────────────
+    let flagMode = false;
+    const flagModeBtn  = document.getElementById('flag-mode-btn');
     const boardEl        = document.getElementById('board');
     const mineCountEl    = document.getElementById('mine-count');
     const timerEl        = document.getElementById('timer');
@@ -397,6 +426,8 @@
         timerInterval: null,
         seconds: 0,
       };
+      flagMode = false;
+      flagModeBtn.classList.remove('active');
       timerEl.textContent = '0';
       mineCountEl.textContent = cfg.mines;
       messageEl.classList.remove('show');
@@ -530,12 +561,29 @@
       }
     }
 
+    // ─── Flag mode toggle ─────────────────────────────────────
+    flagModeBtn.addEventListener('click', () => {
+      flagMode = !flagMode;
+      flagModeBtn.classList.toggle('active', flagMode);
+    });
+
     // ─── Left click ───────────────────────────────────────────
     function onLeftClick(e) {
       if (state.gameOver) return;
       const r = +e.currentTarget.dataset.r;
       const c = +e.currentTarget.dataset.c;
       const cell = state.board[r][c];
+
+      if (flagMode) {
+        if (cell.revealed) return;
+        cell.flagged = !cell.flagged;
+        state.flagCount += cell.flagged ? 1 : -1;
+        const el = cellEl(r, c);
+        el.textContent = cell.flagged ? '🚩' : '';
+        mineCountEl.textContent = state.mines - state.flagCount;
+        return;
+      }
+
       if (cell.revealed || cell.flagged) return;
 
       // First click: place mines and start timer
