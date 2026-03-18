@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minesweeper</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -595,44 +594,122 @@
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
     }
 
+    // ─── Board canvas renderer ────────────────────────────────
+    function renderBoardToCanvas() {
+      const CELL  = 32;
+      const GAP   = 2;
+      const PAD   = 12;
+      const SCALE = 2;
+      const NUM_COLORS = ['', '#64b5f6','#81c784','#e57373','#7986cb','#ff8a65','#4dd0e1','#f06292','#bdbdbd'];
+
+      const levelLabel = { beginner: '初級', intermediate: '中級', expert: '上級' }[state.level];
+      const HEADER = 32; // px for label text
+
+      const W = (state.cols * (CELL + GAP) - GAP + PAD * 2);
+      const H = (state.rows * (CELL + GAP) - GAP + PAD * 2 + HEADER);
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = W * SCALE;
+      canvas.height = H * SCALE;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(SCALE, SCALE);
+
+      // Background
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, W, H);
+
+      // Header label
+      ctx.fillStyle = '#a0c4ff';
+      ctx.font = 'bold 14px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`💣 Minesweeper【${levelLabel}】${state.seconds}s`, PAD, HEADER / 2);
+
+      // Rounded rect helper
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      }
+
+      // Draw cells
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const cell = state.board[r][c];
+          const x = PAD + c * (CELL + GAP);
+          const y = HEADER + PAD + r * (CELL + GAP);
+          const cx = x + CELL / 2;
+          const cy = y + CELL / 2;
+
+          // Cell background
+          if (cell.mine && cell.revealed) {
+            ctx.fillStyle = '#8b0000';
+          } else if (cell.revealed) {
+            ctx.fillStyle = '#1a1a3e';
+          } else {
+            ctx.fillStyle = '#2e2e6e';
+          }
+          roundRect(x, y, CELL, CELL, 4);
+          ctx.fill();
+
+          // Cell content
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          if (cell.flagged && !cell.revealed) {
+            ctx.font = '16px serif';
+            ctx.fillText('🚩', cx, cy);
+          } else if (cell.revealed && cell.mine) {
+            ctx.font = '16px serif';
+            ctx.fillText('💣', cx, cy);
+          } else if (cell.revealed && cell.adjacent > 0) {
+            ctx.fillStyle = NUM_COLORS[cell.adjacent];
+            ctx.font = 'bold 13px "Segoe UI", sans-serif';
+            ctx.fillText(cell.adjacent, cx, cy);
+          }
+        }
+      }
+
+      return canvas;
+    }
+
     // ─── Screenshot ───────────────────────────────────────────
     document.getElementById('screenshot-btn').addEventListener('click', async () => {
       const btn = document.getElementById('screenshot-btn');
       btn.disabled = true;
       btn.textContent = '⏳ 処理中…';
-      try {
-        const canvas = await html2canvas(document.getElementById('board-wrapper'), {
-          backgroundColor: '#1a1a2e',
-          scale: 2,
-        });
-        canvas.toBlob(async (blob) => {
-          let copied = false;
-          try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            copied = true;
-          } catch { /* fallback to download */ }
 
-          if (copied) {
-            showToast('📋 クリップボードにコピーしました！');
-          } else {
-            // フォールバック: ダウンロード
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `minesweeper_${state.level}_${state.seconds}s.png`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('💾 画像をダウンロードしました（Xに添付してください）');
-          }
+      const canvas = renderBoardToCanvas();
+      canvas.toBlob(async (blob) => {
+        let copied = false;
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          copied = true;
+        } catch { /* fallback */ }
 
-          btn.disabled = false;
-          btn.textContent = '📷 盤面をコピー';
-        }, 'image/png');
-      } catch {
-        showToast('⚠️ スクリーンショットの取得に失敗しました', true);
+        if (copied) {
+          showToast('📋 クリップボードにコピーしました！');
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `minesweeper_${state.level}_${state.seconds}s.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('💾 画像をダウンロードしました（Xに添付してください）');
+        }
+
         btn.disabled = false;
         btn.textContent = '📷 盤面をコピー';
-      }
+      }, 'image/png');
     });
 
     // ─── X SVG icon ───────────────────────────────────────────
