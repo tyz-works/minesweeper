@@ -606,14 +606,25 @@
           scale: 2,
         });
         canvas.toBlob(async (blob) => {
+          let copied = false;
           try {
-            await navigator.clipboard.write([
-              new ClipboardItem({ 'image/png': blob })
-            ]);
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            copied = true;
+          } catch { /* fallback to download */ }
+
+          if (copied) {
             showToast('📋 クリップボードにコピーしました！');
-          } catch {
-            showToast('⚠️ コピーに失敗しました（ブラウザの権限を確認してください）', true);
+          } else {
+            // フォールバック: ダウンロード
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `minesweeper_${state.level}_${state.seconds}s.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('💾 画像をダウンロードしました（Xに添付してください）');
           }
+
           btn.disabled = false;
           btn.textContent = '📷 盤面をコピー';
         }, 'image/png');
